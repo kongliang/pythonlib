@@ -99,6 +99,7 @@ class SWF(SWFTimelineContainer):
         super(SWF, self).__init__()
         self.file_path = None if file_path is None else file_path
         self.file_name = None if self.file_path is None else os.path.basename(self.file_path)
+        self.dir_name = None if self.file_path is None else os.path.dirname(self.file_path)
         self._data = None if self.file_path is None else SWFStream(open(self.file_path, 'rb'))
         self._header = None
         if self._data is not None:

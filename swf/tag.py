@@ -832,16 +832,18 @@ class TagDefineBitsLossless(DefinitionTag):
     The minimum file format version for this tag is SWF 2.
     """
     TYPE = 20
-    bitmapData = None
-    image_buffer = b""
-    bitmap_format = 0
-    bitmap_width = 0
-    bitmap_height = 0
-    bitmap_color_size = 0
-    zlib_bitmap_data = None
-    padded_width = 0
+
     def __init__(self):
         super(TagDefineBitsLossless, self).__init__()
+        self.bitmapData = None
+        self.image_buffer = b""
+        self.bitmap_format = 0
+        self.bitmap_width = 0
+        self.bitmap_height = 0
+        self.bitmap_color_size = 0
+        self.zlib_bitmap_data = None
+        self.padded_width = 0
+        self.im = None
 
     def parse(self, data, length, version=1):
         import zlib
@@ -917,10 +919,11 @@ class TagDefineBitsLossless(DefinitionTag):
             raise Exception("unhandled bitmap format! %s %d" % (BitmapFormat.tobytes(self.bitmap_format), self.bitmap_format))
 
         if not im is None:
-            # im.save('%s.png' % self.characterId, 'PNG')
             im.save(self.bitmapData, "PNG")
             self.bitmapData.seek(0)
             self.bitmapType = ImageUtils.get_image_type(self.bitmapData)
+
+        self.im = im
 
     @property
     def name(self):
@@ -1259,11 +1262,6 @@ class TagDefineBitsJPEG3(TagDefineBitsJPEG2):
         self.bitmapData.write(data.f.read(alphaOffset))
         self.bitmapData.seek(0)
         self.bitmapType = ImageUtils.get_image_type(self.bitmapData)
-        f = open('%s%s' % (self.characterId, BitmapType.FileExtensions[self.bitmapType]), 'wb')
-        f.write(self.bitmapData.read())
-        f.flush()
-        f.close()
-        self.bitmapData.seek(0)
         alphaDataSize = length - alphaOffset - 6
         if alphaDataSize > 0:
             self.bitmapAlphaData.write(data.f.read(alphaDataSize))
@@ -1274,12 +1272,6 @@ class TagDefineBitsJPEG3(TagDefineBitsJPEG2):
             temp.write(zip.decompress(self.bitmapAlphaData.read()))
             temp.seek(0)
             self.bitmapAlphaData = temp
-            f = open('%s.alpha' % (self.characterId,), 'wb')
-            f.write(self.bitmapAlphaData.read())
-            f.flush()
-            f.close()
-            temp.seek(0)
-        # im = Image.fromstring("RGBA", (self.bitmap_width, self.bitmap_height), self.image_buffer)
 
 class TagDefineBitsLossless2(TagDefineBitsLossless):
     """
