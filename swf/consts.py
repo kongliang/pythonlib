@@ -15,6 +15,17 @@ class BitmapFormat(Enum):
         BIT_24: 'BIT_24',
     }
 
+
+class BitmapFormat3(Enum):
+    BIT_8 = 3       # ALPHACOLORMAPDATA
+    BIT_32 = 5      # ALPHABITMAPDATA
+
+    _mapping = {
+        BIT_8: 'BIT_8',
+        BIT_32: 'BIT_32',
+    }
+
+
 class BitmapType(Enum):
     JPEG = 1  
     GIF89A = 2

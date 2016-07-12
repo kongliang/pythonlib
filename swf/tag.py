@@ -5,10 +5,8 @@ from .utils import *
 from .stream import *
 import datetime
 from six.moves import range
-try:
-    import Image
-except ImportError:
-    from PIL import Image
+
+from PIL import Image
 import struct
 from io import BytesIO
 
@@ -893,8 +891,7 @@ class TagDefineBitsLossless(DefinitionTag):
             self.image_buffer = s.getvalue()
             s.close()
 
-            # im = Image.frombytes("RGBA", (self.padded_width, self.bitmap_height), self.image_buffer)
-            im = Image.fromstring("RGBA", (self.padded_width, self.bitmap_height), self.image_buffer)
+            im = Image.frombytes("RGBA", (self.padded_width, self.bitmap_height), self.image_buffer)
             im = im.crop((0, 0, self.bitmap_width, self.bitmap_height))
 
         elif self.bitmap_format == BitmapFormat.BIT_15:
@@ -913,8 +910,7 @@ class TagDefineBitsLossless(DefinitionTag):
                 b = ord(temp.read(1))
                 s.write(struct.pack("BBBB", r, g, b, a))
             self.image_buffer = s.getvalue()
-            # im = Image.frombytes("RGBA", (self.bitmap_width, self.bitmap_height), self.image_buffer)
-            im = Image.fromstring("RGBA", (self.bitmap_width, self.bitmap_height), self.image_buffer)
+            im = Image.frombytes("RGBA", (self.bitmap_width, self.bitmap_height), self.image_buffer)
         else:
             raise Exception("unhandled bitmap format! %s %d" % (BitmapFormat.tobytes(self.bitmap_format), self.bitmap_format))
 
@@ -1301,6 +1297,76 @@ class TagDefineBitsLossless2(TagDefineBitsLossless):
     @property
     def version(self):
         return 3
+
+    def parse(self, data, length, version=1):
+        import zlib
+        self.image_buffer = b""
+        self.characterId = data.readUI16()
+        self.bitmap_format = data.readUI8()
+        self.bitmap_width = data.readUI16()
+        self.bitmap_height = data.readUI16()
+        if self.bitmap_format == BitmapFormat3.BIT_8:
+            self.bitmap_color_size = data.readUI8()
+            self.zlib_bitmap_data = data.f.read(length-8)
+        else:
+            self.zlib_bitmap_data = data.f.read(length-7)
+
+        # decompress zlib encoded bytes
+        temp = BytesIO()
+        temp.write(zlib.decompress(self.zlib_bitmap_data))
+        temp.seek(0, 2)
+        temp.seek(0)
+
+        self.bitmapData = BytesIO()
+
+        if self.bitmap_format == BitmapFormat3.BIT_8:       # ALPHACOLORMAPDATA
+            indexed_colors = []
+            for i in xrange(0, self.bitmap_color_size + 1):
+                r = ord(temp.read(1))
+                g = ord(temp.read(1))
+                b = ord(temp.read(1))
+                a = ord(temp.read(1))
+                indexed_colors.append(struct.pack("BBBB", r, g, b, a))
+
+            # padding : should be aligned to 32 bit boundary
+            self.padded_width = self.bitmap_width
+            while self.padded_width % 4 != 0:
+                self.padded_width += 1
+            t = self.padded_width * self.bitmap_height
+
+            # create the image buffer
+            s = BytesIO()
+            for i in range(t):
+                s.write(indexed_colors[ord(temp.read(1))])
+            self.image_buffer = s.getvalue()
+            s.close()
+
+            im = Image.frombytes("RGBA", (self.padded_width, self.bitmap_height), self.image_buffer)
+            im = im.crop((0, 0, self.bitmap_width, self.bitmap_height))
+        elif self.bitmap_format == BitmapFormat3.BIT_32:
+            # we have no padding, since PIX24s are 32-bit aligned
+            t = self.bitmap_width * self.bitmap_height
+            # read PIX24's
+            s = BytesIO()
+            for i in range(0, t):
+                a = ord(temp.read(1))
+                r = ord(temp.read(1))
+                g = ord(temp.read(1))
+                b = ord(temp.read(1))
+                s.write(struct.pack("BBBB", r, g, b, a))
+            self.image_buffer = s.getvalue()
+            s.close()
+
+            im = Image.frombytes("RGBA", (self.bitmap_width, self.bitmap_height), self.image_buffer)
+        else:
+            raise Exception("unhandled bitmap format! %s %d" % (BitmapFormat.tobytes(self.bitmap_format), self.bitmap_format))
+
+        if im is not None:
+            im.save(self.bitmapData, "PNG")
+            self.bitmapData.seek(0)
+            self.bitmapType = ImageUtils.get_image_type(self.bitmapData)
+
+        self.im = im
 
 class TagDefineSprite(SWFTimelineContainer):
     """
